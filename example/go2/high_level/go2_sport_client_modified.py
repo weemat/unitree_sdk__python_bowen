@@ -106,7 +106,7 @@ if __name__ == "__main__":
             elif (input_str == "a"):
                 ret = sport_client.Move(0, -0.3, 0)
             else: 
-                print("Invalid direction input. Please enter n, s, e, or w.")
+                print("Invalid direction input. Please enter w, a, s, or d.")
                 continue
 
             print("ret: ",ret)
