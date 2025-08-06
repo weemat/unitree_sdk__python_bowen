@@ -21,19 +21,19 @@ option_list = [
     TestOption(name="stand_up", id=1),     
     TestOption(name="stand_down", id=2),   
     TestOption(name="move nsew", id=3),          
-    TestOption(name="move rotate", id=5),  
-    TestOption(name="stop_move", id=6),  
-    TestOption(name="hand stand", id=7),
-    TestOption(name="balanced stand", id=9),     
-    TestOption(name="recovery", id=10),       
-    TestOption(name="left flip", id=11),      
-    TestOption(name="back flip", id=12),
-    TestOption(name="free walk", id=13),  
-    TestOption(name="free bound", id=14), 
-    TestOption(name="free avoid", id=15),  
-    TestOption(name="walk upright", id=17),
-    TestOption(name="cross step", id=18),
-    TestOption(name="free jump", id=19)       
+    TestOption(name="move rotate", id=4),  
+    TestOption(name="stop_move", id=5),  
+    TestOption(name="hand stand", id=6),
+    TestOption(name="balanced stand", id=8),     
+    TestOption(name="recovery", id=9),       
+    TestOption(name="left flip", id=10),      
+    TestOption(name="back flip", id=11),
+    TestOption(name="free walk", id=12),  
+    TestOption(name="free bound", id=13), 
+    TestOption(name="free avoid", id=14),  
+    TestOption(name="walk upright", id=16),
+    TestOption(name="cross step", id=17),
+    TestOption(name="free jump", id=18)       
 ]
 
 class UserInterface:
@@ -110,7 +110,7 @@ if __name__ == "__main__":
                 continue
 
             print("ret: ",ret)
-        elif test_option.id == 5:
+        elif test_option.id == 4:
             input = input("enter r to rotate right and l to rotate left: \n")
             if (input == "r"):
                 sport_client.Move(0, 0, -0.5)       # Rotate right
@@ -119,50 +119,50 @@ if __name__ == "__main__":
             else:
                 print("Invalid input. Please enter r or l.")
                 continue
-        elif test_option.id == 6:
+        elif test_option.id == 5:
             sport_client.StopMove()          # Stop moving
-        elif test_option.id == 7:
+        elif test_option.id == 6:
             sport_client.HandStand(True)     # HandStand
             time.sleep(4)
             sport_client.HandStand(False)
-        elif test_option.id == 9:
+        elif test_option.id == 8:
             sport_client.BalanceStand()
-        elif test_option.id == 10:
+        elif test_option.id == 9:
             sport_client.RecoveryStand()
-        elif test_option.id == 11:
+        elif test_option.id == 10:
             ret = sport_client.LeftFlip()
             print("ret: ",ret)
-        elif test_option.id == 12:
+        elif test_option.id == 11:
             ret = sport_client.BackFlip()
             print("ret: ",ret)
-        elif test_option.id == 13:
+        elif test_option.id == 12:
             ret = sport_client.FreeWalk()
             print("ret: ",ret)
-        elif test_option.id == 14:
+        elif test_option.id == 13:
             ret = sport_client.FreeBound(True)
             print("ret: ",ret)
             time.sleep(2)
             ret = sport_client.FreeBound(False)
             print("ret: ",ret)
-        elif test_option.id == 15:
+        elif test_option.id == 14:
             ret = sport_client.FreeAvoid(True)
             print("ret: ",ret)
             time.sleep(2)
             ret = sport_client.FreeAvoid(False)
             print("ret: ",ret)
-        elif test_option.id == 17:
+        elif test_option.id == 16:
             ret = sport_client.WalkUpright(True)
             print("ret: ",ret)
             time.sleep(4)
             ret = sport_client.WalkUpright(False)
             print("ret: ",ret)
-        elif test_option.id == 18:
+        elif test_option.id == 17:
             ret = sport_client.CrossStep(True)
             print("ret: ",ret)
             time.sleep(4)
             ret = sport_client.CrossStep(False)
             print("ret: ",ret)
-        elif test_option.id == 19:
+        elif test_option.id == 18:
             ret = sport_client.FreeJump(True)
             print("ret: ",ret)
             time.sleep(4)
