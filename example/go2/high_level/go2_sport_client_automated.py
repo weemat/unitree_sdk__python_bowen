@@ -62,27 +62,57 @@ class LiveController:
     def on_press(self, key):
         """Handle key press events"""
         try:
-            key_char = key.char.lower()
+            # Debug: Print what key was pressed
+            print(f"Key pressed: {key}")
+            
+            # Handle ESC key to exit
+            if hasattr(key, 'name') and key.name == 'esc':
+                print("ESC pressed - exiting...")
+                self.stop_control()
+                return False  # Stop listener
+            
             with self.command_lock:
-                if key_char in self.key_commands and self.current_command != key_char:
-                    command_name, command_func = self.key_commands[key_char]
-                    self.current_command = key_char
-                    print(f"Executing: {command_name}")
-                    command_func()
-        except AttributeError:
-            pass  # Ignore special keys like Shift, Ctrl, etc.
+                # Handle character keys (WASD)
+                if hasattr(key, 'char') and key.char:
+                    key_char = key.char.lower()
+                    print(f"Character key: {key_char}")
+                    if key_char in self.key_commands and self.current_command != key_char:
+                        command_name, command_func = self.key_commands[key_char]
+                        self.current_command = key_char
+                        print(f"Executing: {command_name}")
+                        command_func()
+                # Handle arrow keys
+                elif hasattr(key, 'name') and key.name:
+                    key_name = key.name.lower()
+                    print(f"Special key: {key_name}")
+                    if key_name in self.key_commands and self.current_command != key_name:
+                        command_name, command_func = self.key_commands[key_name]
+                        self.current_command = key_name
+                        print(f"Executing: {command_name}")
+                        command_func()
+        except Exception as e:
+            print(f"Key press error: {e}")
 
     def on_release(self, key):
         """Handle key release events"""
         try:
-            key_char = key.char.lower()
             with self.command_lock:
-                if key_char == self.current_command:
-                    print(f"Stopping: {self.key_commands[key_char][0]}")
-                    self.sport_client.StopMove()
-                    self.current_command = None
-        except AttributeError:
-            pass
+                # Handle character keys (WASD)
+                if hasattr(key, 'char') and key.char:
+                    key_char = key.char.lower()
+                    if key_char == self.current_command:
+                        print(f"Stopping: {self.key_commands[key_char][0]}")
+                        self.sport_client.StopMove()
+                        self.current_command = None
+                # Handle arrow keys
+                elif hasattr(key, 'name') and key.name:
+                    key_name = key.name.lower()
+                    if key_name == self.current_command:
+                        print(f"Stopping: {self.key_commands[key_name][0]}")
+                        self.sport_client.StopMove()
+                        self.current_command = None
+        except Exception as e:
+            print(f"Key release error: {e}")
 
     def start_control(self):
         """Start the live control system"""
