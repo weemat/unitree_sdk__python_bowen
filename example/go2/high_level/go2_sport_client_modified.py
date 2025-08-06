@@ -96,14 +96,14 @@ if __name__ == "__main__":
         elif test_option.id == 2:
             sport_client.StandDown()
         elif test_option.id == 3:
-            input_str = input("enter n, s, e, w for move direction: \n")
-            if (input_str == "n"):
+            input_str = input("enter w, a, s, d for move direction: \n")
+            if (input_str == "w"):
                 ret = sport_client.Move(0.3, 0, 0)
             elif (input_str == "s"):
                 ret = sport_client.Move(-0.3, 0, 0)
-            elif (input_str == "e"):
+            elif (input_str == "d"):
                 ret = sport_client.Move(0, 0.3, 0)
-            elif (input_str == "w"):
+            elif (input_str == "a"):
                 ret = sport_client.Move(0, -0.3, 0)
             else: 
                 print("Invalid direction input. Please enter n, s, e, or w.")
