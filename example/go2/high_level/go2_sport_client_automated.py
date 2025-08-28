@@ -47,6 +47,17 @@ def do_move(client: SportClient, vx: float, vy: float, wz: float, duration: floa
     if SHOW_RETURNS:
         print("Stop ret:", ret)
 
+def do_walk_upright(client: SportClient, duration: float):
+    if SHOW_RETURNS:
+        print(f"Walk upright for {duration:.2f}s")
+    ret = client.WalkUpright(True)
+    if SHOW_RETURNS:
+        print("Walk upright ret:", ret)
+    time.sleep(duration)
+    ret = client.WalkUpright(False)
+    if SHOW_RETURNS:
+        print("Stop Walk upright ret:", ret)
+
 def curses_main(stdscr, client: SportClient):
     curses.curs_set(0)
     stdscr.nodelay(False)   # block until a key is pressed (prevents simultaneous handling)
@@ -83,6 +94,10 @@ def curses_main(stdscr, client: SportClient):
             client.StopMove()
             continue
 
+        '''
+        Functions to add:
+        - Walk upright
+        '''
         # normalized tap controls (one command at a time)
         if ch in (ord('w'), ord('W')):
             do_move(client, LINEAR_SPEED, 0.0, 0.0)
@@ -97,6 +112,8 @@ def curses_main(stdscr, client: SportClient):
             do_move(client, 0.0, 0.0,  ANGULAR_SPEED)   # rotate left (CCW)
         elif ch == curses.KEY_RIGHT:
             do_move(client, 0.0, 0.0, -ANGULAR_SPEED)   # rotate right (CW)
+        elif ch == curses.KEY_UP:
+            do_walk_upright(client, 2.0)
         else:
             # ignore any other keys
             pass
