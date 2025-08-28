@@ -27,9 +27,9 @@ from unitree_sdk2py.core.channel import ChannelFactoryInitialize
 from unitree_sdk2py.go2.sport.sport_client import SportClient
 
 # --- Tunable parameters (choose conservative values to start) ---
-LINEAR_SPEED   = 0.30   # m/s forward/backward  (vx)
-LATERAL_SPEED  = 0.30   # m/s left/right        (vy)  (positive vy is typically left)
-ANGULAR_SPEED  = 0.60   # rad/s yaw rate        (wz)
+LINEAR_SPEED   = 0.80   # m/s forward/backward  (vx) - increased from 0.30
+LATERAL_SPEED  = 0.60   # m/s left/right        (vy) - increased from 0.30
+ANGULAR_SPEED  = 1.20   # rad/s yaw rate        (wz) - increased from 0.60
 UPDATE_RATE    = 0.05   # seconds between movement updates (20 Hz)
 
 SHOW_RETURNS   = False  # set True to print SDK return codes from Move/Stop
