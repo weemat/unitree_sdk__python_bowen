@@ -1,87 +1,147 @@
+#!/usr/bin/env python3
+"""
+Go2 EDU: simple WASD + arrow-key teleop (discrete, one-command-at-a-time)
+
+Requirements:
+- Unitree SDK 2 Python: https://github.com/unitreerobotics/unitree_sdk2_python
+- Runs in a terminal (uses curses)
+
+Controls:
+  w/s : forward/backward (vx)
+  a/d : left/right (vy)
+  ←/→ : rotate left/right (wz)
+  space: StopMove()
+  q or ESC: quit
+
+Safety:
+- Keep a clear area around the robot.
+- Speeds/durations below are intentionally modest. Tune with care.
+"""
+
 import sys
 import time
-from threading import Event
-from pynput import keyboard
+import curses
+
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize
 from unitree_sdk2py.go2.sport.sport_client import SportClient
 
-# Movement speeds
-MOVE_SPEED = 0.3
-ROTATE_SPEED = 0.5
+# --- Tunable parameters (choose conservative values to start) ---
+LINEAR_SPEED   = 0.30   # m/s forward/backward  (vx)
+LATERAL_SPEED  = 0.30   # m/s left/right        (vy)  (positive vy is typically left)
+ANGULAR_SPEED  = 0.60   # rad/s yaw rate        (wz)
+MOVE_DURATION  = 0.25   # seconds per key press (short, discrete step)
 
-# Global flags
-exit_event = Event()
-last_key = None
+SHOW_RETURNS   = False  # set True to print SDK return codes from Move/Stop
 
-def on_press(key):
-    global last_key
-    try:
-        if key.char in ['w', 'a', 's', 'd']:
-            last_key = key.char
-    except AttributeError:
-        if key == keyboard.Key.left:
-            last_key = 'left'
-        elif key == keyboard.Key.right:
-            last_key = 'right'
-        elif key == keyboard.Key.esc:
-            exit_event.set()
+# ----------------------------------------------------------------
 
-def on_release(key):
-    global last_key
-    # Reset on key release to ensure only one command at a time
-    last_key = None
+def do_move(client: SportClient, vx: float, vy: float, wz: float, duration: float = MOVE_DURATION):
+    """Send a brief motion command, then stop."""
+    if SHOW_RETURNS:
+        print(f"Move(vx={vx:.2f}, vy={vy:.2f}, wz={wz:.2f}) for {duration:.2f}s")
+    ret = client.Move(vx, vy, wz)
+    if SHOW_RETURNS:
+        print("ret:", ret)
+    time.sleep(duration)
+    ret = client.StopMove()
+    if SHOW_RETURNS:
+        print("Stop ret:", ret)
+
+def curses_main(stdscr, client: SportClient):
+    curses.curs_set(0)
+    stdscr.nodelay(False)   # block until a key is pressed (prevents simultaneous handling)
+    stdscr.keypad(True)     # enable arrow keys
+
+    lines = [
+        "Go2 EDU Teleop (WASD + Arrow Keys)",
+        "----------------------------------",
+        "w/s : forward/backward",
+        "a/d : left/right (strafe)",
+        "←/→ : rotate left/right",
+        "space: immediate stop",
+        "q or ESC: quit",
+        "",
+        f"Speeds: vx={LINEAR_SPEED} m/s, vy={LATERAL_SPEED} m/s, wz={ANGULAR_SPEED} rad/s",
+        f"Step duration per key: {MOVE_DURATION} s",
+        "",
+        "Ready. Press a key…"
+    ]
+
+    for i, t in enumerate(lines):
+        stdscr.addstr(i, 0, t)
+    stdscr.refresh()
+
+    while True:
+        ch = stdscr.getch()
+
+        # quit
+        if ch in (ord('q'), 27):  # 'q' or ESC
+            break
+
+        # space -> hard stop
+        if ch == ord(' '):
+            client.StopMove()
+            continue
+
+        # normalized tap controls (one command at a time)
+        if ch in (ord('w'), ord('W')):
+            do_move(client, LINEAR_SPEED, 0.0, 0.0)
+        elif ch in (ord('s'), ord('S')):
+            do_move(client, -LINEAR_SPEED, 0.0, 0.0)
+        elif ch in (ord('a'), ord('A')):
+            # NOTE: If left/right seems reversed on your setup, swap +/- below.
+            do_move(client, 0.0,  LATERAL_SPEED, 0.0)   # left strafe
+        elif ch in (ord('d'), ord('D')):
+            do_move(client, 0.0, -LATERAL_SPEED, 0.0)   # right strafe
+        elif ch == curses.KEY_LEFT:
+            do_move(client, 0.0, 0.0,  ANGULAR_SPEED)   # rotate left (CCW)
+        elif ch == curses.KEY_RIGHT:
+            do_move(client, 0.0, 0.0, -ANGULAR_SPEED)   # rotate right (CW)
+        else:
+            # ignore any other keys
+            pass
+
+        # Refresh minimal status line (optional)
+        stdscr.addstr(len(lines)+1, 0, f"Last key: {ch:>4}         ")
+        stdscr.refresh()
 
 def main():
-    global last_key
-
-    print("WARNING: Please ensure there are no obstacles around the robot while running this example.")
+    print("WARNING: Ensure a clear area around the robot before proceeding.")
     input("Press Enter to continue...")
 
+    # Optional: pass robot address as first arg (matches Unitree samples).
+    # e.g. python go2_teleop.py 192.168.12.1
     if len(sys.argv) > 1:
         ChannelFactoryInitialize(0, sys.argv[1])
     else:
         ChannelFactoryInitialize(0)
 
-    sport_client = SportClient()
-    sport_client.SetTimeout(10.0)
-    sport_client.Init()
+    client = SportClient()
+    client.SetTimeout(10.0)
+    client.Init()
 
-    print("Standing up...")
-    sport_client.StandUp()
-    time.sleep(2)
-
-    print("Control the robot with W/A/S/D and arrow keys. Press ESC to stop and enter Damp mode.")
-
-    # Start listening to keyboard events
-    listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-    listener.start()
+    # Bring robot to a safe, ready posture (comment out if you prefer manual control)
+    try:
+        client.StandUp()
+        time.sleep(1.0)
+    except Exception:
+        # If already standing or command not available, just continue.
+        pass
 
     try:
-        while not exit_event.is_set():
-            if last_key == 'w':
-                sport_client.Move(MOVE_SPEED, 0, 0)
-            elif last_key == 's':
-                sport_client.Move(-MOVE_SPEED, 0, 0)
-            elif last_key == 'a':
-                sport_client.Move(0, MOVE_SPEED, 0)
-            elif last_key == 'd':
-                sport_client.Move(0, -MOVE_SPEED, 0)
-            elif last_key == 'left':
-                sport_client.Move(0, 0, ROTATE_SPEED)
-            elif last_key == 'right':
-                sport_client.Move(0, 0, -ROTATE_SPEED)
-            else:
-                sport_client.StopMove()
-
-            time.sleep(0.1)
-
-    except KeyboardInterrupt:
-        pass
+        curses.wrapper(curses_main, client)
     finally:
-        print("Exiting... Entering Damp mode.")
-        sport_client.StopMove()
-        sport_client.Damp()
-        listener.stop()
+        # Always stop motion and leave the robot in a stable state on exit.
+        try:
+            client.StopMove()
+        except Exception:
+            pass
+        # Prefer not to force StandDown automatically; uncomment if desired:
+        # try:
+        #     client.StandDown()
+        # except Exception:
+        #     pass
+        print("\nExiting teleop.")
 
 if __name__ == "__main__":
     main()
