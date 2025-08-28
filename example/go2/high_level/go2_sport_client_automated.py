@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Go2 EDU: simple WASD + arrow-key teleop (discrete, one-command-at-a-time)
+Go2 EDU: continuous WASD + arrow-key teleop (hold-to-move)
 
 Requirements:
 - Unitree SDK 2 Python: https://github.com/unitreerobotics/unitree_sdk2_python
 - Runs in a terminal (uses curses)
 
 Controls:
-  w/s : forward/backward (vx)
-  a/d : left/right (vy)
-  ←/→ : rotate left/right (wz)
+  w/s : forward/backward (vx) - hold to move continuously
+  a/d : left/right (vy) - hold to move continuously  
+  ←/→ : rotate left/right (wz) - hold to rotate continuously
   space: StopMove()
   q or ESC: quit
 
@@ -21,6 +21,7 @@ Safety:
 import sys
 import time
 import curses
+import threading
 
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize
 from unitree_sdk2py.go2.sport.sport_client import SportClient
@@ -29,98 +30,137 @@ from unitree_sdk2py.go2.sport.sport_client import SportClient
 LINEAR_SPEED   = 0.30   # m/s forward/backward  (vx)
 LATERAL_SPEED  = 0.30   # m/s left/right        (vy)  (positive vy is typically left)
 ANGULAR_SPEED  = 0.60   # rad/s yaw rate        (wz)
-MOVE_DURATION  = 0.25   # seconds per key press (short, discrete step)
+UPDATE_RATE    = 0.05   # seconds between movement updates (20 Hz)
 
 SHOW_RETURNS   = False  # set True to print SDK return codes from Move/Stop
 
 # ----------------------------------------------------------------
 
-def do_move(client: SportClient, vx: float, vy: float, wz: float, duration: float = MOVE_DURATION):
-    """Send a brief motion command, then stop."""
-    if SHOW_RETURNS:
-        print(f"Move(vx={vx:.2f}, vy={vy:.2f}, wz={wz:.2f}) for {duration:.2f}s")
-    ret = client.Move(vx, vy, wz)
-    if SHOW_RETURNS:
-        print("ret:", ret)
-    time.sleep(duration)
-    ret = client.StopMove()
-    if SHOW_RETURNS:
-        print("Stop ret:", ret)
+class ContinuousController:
+    def __init__(self, client: SportClient):
+        self.client = client
+        self.current_vx = 0.0
+        self.current_vy = 0.0
+        self.current_wz = 0.0
+        self.running = True
+        self.lock = threading.Lock()
+        
+        # Start movement update thread
+        self.update_thread = threading.Thread(target=self._movement_updater)
+        self.update_thread.daemon = True
+        self.update_thread.start()
+    
+    def _movement_updater(self):
+        """Background thread that continuously sends movement commands"""
+        while self.running:
+            with self.lock:
+                vx, vy, wz = self.current_vx, self.current_vy, self.current_wz
+            
+            # Only send command if there's actual movement
+            if vx != 0.0 or vy != 0.0 or wz != 0.0:
+                if SHOW_RETURNS:
+                    print(f"Move(vx={vx:.2f}, vy={vy:.2f}, wz={wz:.2f})")
+                ret = self.client.Move(vx, vy, wz)
+                if SHOW_RETURNS:
+                    print("ret:", ret)
+            else:
+                # Stop if no movement
+                ret = self.client.StopMove()
+                if SHOW_RETURNS:
+                    print("Stop ret:", ret)
+            
+            time.sleep(UPDATE_RATE)
+    
+    def set_movement(self, vx: float, vy: float, wz: float):
+        """Set the current movement velocities"""
+        with self.lock:
+            self.current_vx = vx
+            self.current_vy = vy
+            self.current_wz = wz
+    
+    def stop(self):
+        """Stop all movement and clean up"""
+        self.running = False
+        with self.lock:
+            self.current_vx = 0.0
+            self.current_vy = 0.0
+            self.current_wz = 0.0
+        self.client.StopMove()
 
-def do_walk_upright(client: SportClient, duration: float):
-    if SHOW_RETURNS:
-        print(f"Walk upright for {duration:.2f}s")
-    ret = client.WalkUpright(True)
-    if SHOW_RETURNS:
-        print("Walk upright ret:", ret)
-    time.sleep(duration)
-    ret = client.WalkUpright(False)
-    if SHOW_RETURNS:
-        print("Stop Walk upright ret:", ret)
-
-def curses_main(stdscr, client: SportClient):
+def curses_main(stdscr, controller: ContinuousController):
     curses.curs_set(0)
-    stdscr.nodelay(False)   # block until a key is pressed (prevents simultaneous handling)
-    stdscr.keypad(True)     # enable arrow keys
+    stdscr.nodelay(True)   # Don't block on key input (enables continuous polling)
+    stdscr.keypad(True)    # enable arrow keys
 
     lines = [
-        "Go2 EDU Teleop (WASD + Arrow Keys)",
-        "----------------------------------",
-        "w/s : forward/backward",
-        "a/d : left/right (strafe)",
-        "←/→ : rotate left/right",
+        "Go2 EDU Continuous Teleop (WASD + Arrow Keys)",
+        "---------------------------------------------",
+        "w/s : forward/backward (hold to move)",
+        "a/d : left/right (strafe) (hold to move)",
+        "←/→ : rotate left/right (hold to rotate)",
         "space: immediate stop",
         "q or ESC: quit",
         "",
         f"Speeds: vx={LINEAR_SPEED} m/s, vy={LATERAL_SPEED} m/s, wz={ANGULAR_SPEED} rad/s",
-        f"Step duration per key: {MOVE_DURATION} s",
+        f"Update rate: {1.0/UPDATE_RATE:.1f} Hz",
         "",
-        "Ready. Press a key…"
+        "Ready. Hold keys to move continuously..."
     ]
 
     for i, t in enumerate(lines):
         stdscr.addstr(i, 0, t)
     stdscr.refresh()
 
+    # Track which keys are currently pressed
+    pressed_keys = set()
+
     while True:
         ch = stdscr.getch()
-
-        # quit
-        if ch in (ord('q'), 27):  # 'q' or ESC
-            break
-
-        # space -> hard stop
-        if ch == ord(' '):
-            client.StopMove()
-            continue
-
-        '''
-        Functions to add:
-        - Walk upright
-        '''
-        # normalized tap controls (one command at a time)
-        if ch in (ord('w'), ord('W')):
-            do_move(client, LINEAR_SPEED, 0.0, 0.0)
-        elif ch in (ord('s'), ord('S')):
-            do_move(client, -LINEAR_SPEED, 0.0, 0.0)
-        elif ch in (ord('a'), ord('A')):
-            # NOTE: If left/right seems reversed on your setup, swap +/- below.
-            do_move(client, 0.0,  LATERAL_SPEED, 0.0)   # left strafe
-        elif ch in (ord('d'), ord('D')):
-            do_move(client, 0.0, -LATERAL_SPEED, 0.0)   # right strafe
-        elif ch == curses.KEY_LEFT:
-            do_move(client, 0.0, 0.0,  ANGULAR_SPEED)   # rotate left (CCW)
-        elif ch == curses.KEY_RIGHT:
-            do_move(client, 0.0, 0.0, -ANGULAR_SPEED)   # rotate right (CW)
-        elif ch == curses.KEY_UP:
-            do_walk_upright(client, 2.0)
+        
+        # Handle key press/release
+        if ch != -1:  # -1 means no key pressed
+            if ch in (ord('q'), 27):  # 'q' or ESC
+                break
+            elif ch == ord(' '):  # space
+                controller.set_movement(0.0, 0.0, 0.0)
+                pressed_keys.clear()
+            else:
+                pressed_keys.add(ch)
         else:
-            # ignore any other keys
-            pass
+            # No key pressed, clear all pressed keys
+            pressed_keys.clear()
 
-        # Refresh minimal status line (optional)
-        stdscr.addstr(len(lines)+1, 0, f"Last key: {ch:>4}         ")
+        # Determine movement based on currently pressed keys
+        vx, vy, wz = 0.0, 0.0, 0.0
+        
+        # Forward/backward
+        if ord('w') in pressed_keys or ord('W') in pressed_keys:
+            vx += LINEAR_SPEED
+        if ord('s') in pressed_keys or ord('S') in pressed_keys:
+            vx -= LINEAR_SPEED
+            
+        # Left/right strafe
+        if ord('a') in pressed_keys or ord('A') in pressed_keys:
+            vy += LATERAL_SPEED  # left strafe
+        if ord('d') in pressed_keys or ord('D') in pressed_keys:
+            vy -= LATERAL_SPEED  # right strafe
+            
+        # Rotation
+        if curses.KEY_LEFT in pressed_keys:
+            wz += ANGULAR_SPEED  # rotate left (CCW)
+        if curses.KEY_RIGHT in pressed_keys:
+            wz -= ANGULAR_SPEED  # rotate right (CW)
+
+        # Send movement command
+        controller.set_movement(vx, vy, wz)
+
+        # Refresh status display
+        status_line = f"Movement: vx={vx:6.2f} vy={vy:6.2f} wz={wz:6.2f} | Pressed: {len(pressed_keys)} keys"
+        stdscr.addstr(len(lines)+1, 0, status_line + " " * 20)  # Clear any leftover text
         stdscr.refresh()
+
+        # Small delay to prevent excessive CPU usage
+        time.sleep(0.01)
 
 def main():
     print("WARNING: Ensure a clear area around the robot before proceeding.")
@@ -145,19 +185,14 @@ def main():
         # If already standing or command not available, just continue.
         pass
 
+    # Create continuous controller
+    controller = ContinuousController(client)
+
     try:
-        curses.wrapper(curses_main, client)
+        curses.wrapper(curses_main, controller)
     finally:
         # Always stop motion and leave the robot in a stable state on exit.
-        try:
-            client.StopMove()
-        except Exception:
-            pass
-        # Prefer not to force StandDown automatically; uncomment if desired:
-        # try:
-        #     client.StandDown()
-        # except Exception:
-        #     pass
+        controller.stop()
         print("\nExiting teleop.")
 
 if __name__ == "__main__":
