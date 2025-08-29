@@ -47,10 +47,9 @@ def do_move(client: SportClient, vx: float, vy: float, wz: float, duration: floa
     ret = client.Move(vx, vy, wz)
     if SHOW_RETURNS:
         print("ret:", ret)
-    time.sleep(duration)
-    ret = client.StopMove()
-    if SHOW_RETURNS:
-        print("Stop ret:", ret)
+    
+    # Don't sleep here - let the main loop handle timing and override detection
+    # The movement will continue until another key is pressed or space is pressed
 
 def curses_main(stdscr, client: SportClient):
     curses.curs_set(0)
@@ -78,12 +77,23 @@ def curses_main(stdscr, client: SportClient):
     
     # Track current movement for smart override
     current_movement = {'vx': 0.0, 'vy': 0.0, 'wz': 0.0}
+    movement_start_time = None
+    is_moving = False
 
     while True:
         ch = stdscr.getch()
         
-        # Handle no key pressed
+        # Handle no key pressed and check movement timer
         if ch == -1:  # -1 means no key pressed
+            # Check if current movement has exceeded duration
+            if is_moving and movement_start_time and (time.time() - movement_start_time) >= MOVE_DURATION:
+                client.StopMove()
+                is_moving = False
+                movement_start_time = None
+                current_movement = {'vx': 0.0, 'vy': 0.0, 'wz': 0.0}
+                if SHOW_RETURNS:
+                    print("Movement duration expired - stopping")
+            
             time.sleep(0.01)  # Small delay to prevent excessive CPU usage
             continue
 
@@ -96,6 +106,8 @@ def curses_main(stdscr, client: SportClient):
             client.StopMove()
             # Reset current movement tracking to indicate complete stop
             current_movement = {'vx': 0.0, 'vy': 0.0, 'wz': 0.0}
+            is_moving = False
+            movement_start_time = None
             continue
 
         # Smart movement controls - override only when movement changes
@@ -104,32 +116,44 @@ def curses_main(stdscr, client: SportClient):
             override = (new_movement != current_movement)
             do_move(client, LINEAR_SPEED, 0.0, 0.0, override=override)
             current_movement = new_movement
+            movement_start_time = time.time()
+            is_moving = True
         elif ch in (ord('s'), ord('S')):
             new_movement = {'vx': -LINEAR_SPEED, 'vy': 0.0, 'wz': 0.0}
             override = (new_movement != current_movement)
             do_move(client, -LINEAR_SPEED, 0.0, 0.0, override=override)
             current_movement = new_movement
+            movement_start_time = time.time()
+            is_moving = True
         elif ch in (ord('a'), ord('A')):
             # NOTE: If left/right seems reversed on your setup, swap +/- below.
             new_movement = {'vx': 0.0, 'vy': LATERAL_SPEED, 'wz': 0.0}
             override = (new_movement != current_movement)
             do_move(client, 0.0, LATERAL_SPEED, 0.0, override=override)   # left strafe
             current_movement = new_movement
+            movement_start_time = time.time()
+            is_moving = True
         elif ch in (ord('d'), ord('D')):
             new_movement = {'vx': 0.0, 'vy': -LATERAL_SPEED, 'wz': 0.0}
             override = (new_movement != current_movement)
             do_move(client, 0.0, -LATERAL_SPEED, 0.0, override=override)   # right strafe
             current_movement = new_movement
+            movement_start_time = time.time()
+            is_moving = True
         elif ch == curses.KEY_LEFT:
             new_movement = {'vx': 0.0, 'vy': 0.0, 'wz': ANGULAR_SPEED}
             override = (new_movement != current_movement)
             do_move(client, 0.0, 0.0, ANGULAR_SPEED, override=override)   # rotate left (CCW)
             current_movement = new_movement
+            movement_start_time = time.time()
+            is_moving = True
         elif ch == curses.KEY_RIGHT:
             new_movement = {'vx': 0.0, 'vy': 0.0, 'wz': -ANGULAR_SPEED}
             override = (new_movement != current_movement)
             do_move(client, 0.0, 0.0, -ANGULAR_SPEED, override=override)   # rotate right (CW)
             current_movement = new_movement
+            movement_start_time = time.time()
+            is_moving = True
         else:
             # ignore any other keys
             pass
