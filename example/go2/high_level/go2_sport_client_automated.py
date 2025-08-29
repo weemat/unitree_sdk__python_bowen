@@ -30,7 +30,8 @@ from unitree_sdk2py.go2.sport.sport_client import SportClient
 LINEAR_SPEED   = 0.80   # m/s forward/backward  (vx) - increased from 0.30
 LATERAL_SPEED  = 0.60   # m/s left/right        (vy) - increased from 0.30
 ANGULAR_SPEED  = 1.4   # rad/s yaw rate        (wz) - increased from 0.60
-UPDATE_RATE    = 0.05   # seconds between movement updates (20 Hz)
+UPDATE_RATE    = 0.10   # seconds between movement updates (10 Hz) - reduced for smoother movement
+VELOCITY_RAMP_RATE = 0.3  # m/s per second - how fast to ramp up/down velocity
 
 SHOW_RETURNS   = False   # set True to print SDK return codes from Move/Stop
 
@@ -42,6 +43,9 @@ class ContinuousController:
         self.current_vx = 0.0
         self.current_vy = 0.0
         self.current_wz = 0.0
+        self.target_vx = 0.0  # Target velocity for smooth ramping
+        self.target_vy = 0.0
+        self.target_wz = 0.0
         self.walk_upright_active = False  # Track walk upright state
         self.running = True
         self.lock = threading.Lock()
@@ -52,16 +56,37 @@ class ContinuousController:
         self.update_thread.start()
     
     def _movement_updater(self):
-        """Background thread that continuously sends movement commands"""
+        """Background thread that continuously sends movement commands with smooth ramping"""
         while self.running:
             with self.lock:
-                vx, vy, wz = self.current_vx, self.current_vy, self.current_wz
+                target_vx, target_vy, target_wz = self.target_vx, self.target_vy, self.target_wz
+            
+            # Smooth velocity ramping
+            max_change = VELOCITY_RAMP_RATE * UPDATE_RATE
+            
+            # Ramp vx towards target
+            if self.current_vx < target_vx:
+                self.current_vx = min(self.current_vx + max_change, target_vx)
+            elif self.current_vx > target_vx:
+                self.current_vx = max(self.current_vx - max_change, target_vx)
+            
+            # Ramp vy towards target
+            if self.current_vy < target_vy:
+                self.current_vy = min(self.current_vy + max_change, target_vy)
+            elif self.current_vy > target_vy:
+                self.current_vy = max(self.current_vy - max_change, target_vy)
+            
+            # Ramp wz towards target
+            if self.current_wz < target_wz:
+                self.current_wz = min(self.current_wz + max_change, target_wz)
+            elif self.current_wz > target_wz:
+                self.current_wz = max(self.current_wz - max_change, target_wz)
             
             # Only send command if there's actual movement
-            if vx != 0.0 or vy != 0.0 or wz != 0.0:
+            if abs(self.current_vx) > 0.01 or abs(self.current_vy) > 0.01 or abs(self.current_wz) > 0.01:
                 if SHOW_RETURNS:
-                    print(f"Move(vx={vx:.2f}, vy={vy:.2f}, wz={wz:.2f})")
-                ret = self.client.Move(vx, vy, wz)
+                    print(f"Move(vx={self.current_vx:.2f}, vy={self.current_vy:.2f}, wz={self.current_wz:.2f})")
+                ret = self.client.Move(self.current_vx, self.current_vy, self.current_wz)
                 if SHOW_RETURNS:
                     print("ret:", ret)
             else:
@@ -73,11 +98,11 @@ class ContinuousController:
             time.sleep(UPDATE_RATE)
     
     def set_movement(self, vx: float, vy: float, wz: float):
-        """Set the current movement velocities"""
+        """Set the target movement velocities (will be smoothly ramped to)"""
         with self.lock:
-            self.current_vx = vx
-            self.current_vy = vy
-            self.current_wz = wz
+            self.target_vx = vx
+            self.target_vy = vy
+            self.target_wz = wz
     
     def set_walk_upright(self, enable: bool):
         """Enable or disable walk upright mode"""
@@ -140,7 +165,7 @@ def curses_main(stdscr, controller: ContinuousController):
         "q or ESC: quit",
         "",
         f"Speeds: vx={LINEAR_SPEED} m/s, vy={LATERAL_SPEED} m/s, wz={ANGULAR_SPEED} rad/s",
-        f"Update rate: {1.0/UPDATE_RATE:.1f} Hz",
+        f"Update rate: {1.0/UPDATE_RATE:.1f} Hz | Ramp rate: {VELOCITY_RAMP_RATE} m/s²",
         "",
         "Ready. Hold keys to move continuously..."
     ]
@@ -215,7 +240,7 @@ def curses_main(stdscr, controller: ContinuousController):
 
         # Refresh status display
         walk_status = "WALK UPRIGHT" if controller.walk_upright_active else "Normal"
-        status_line = f"Movement: vx={vx:6.2f} vy={vy:6.2f} wz={wz:6.2f} | Mode: {walk_status} | Pressed: {len(pressed_keys)} keys"
+        status_line = f"Target: vx={vx:6.2f} vy={vy:6.2f} wz={wz:6.2f} | Current: vx={controller.current_vx:6.2f} vy={controller.current_vy:6.2f} wz={controller.current_wz:6.2f} | Mode: {walk_status}"
         stdscr.addstr(len(lines)+1, 0, status_line + " " * 20)  # Clear any leftover text
         stdscr.refresh()
 
