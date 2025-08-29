@@ -32,7 +32,7 @@ LATERAL_SPEED  = 0.60   # m/s left/right        (vy) - increased from 0.30
 ANGULAR_SPEED  = 1.4   # rad/s yaw rate        (wz) - increased from 0.60
 UPDATE_RATE    = 0.05   # seconds between movement updates (20 Hz)
 
-SHOW_RETURNS   = True   # set True to print SDK return codes from Move/Stop
+SHOW_RETURNS   = False   # set True to print SDK return codes from Move/Stop
 
 # ----------------------------------------------------------------
 
