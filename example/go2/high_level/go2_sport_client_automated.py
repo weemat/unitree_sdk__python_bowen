@@ -43,9 +43,9 @@ class ContinuousController:
         self.current_vx = 0.0
         self.current_vy = 0.0
         self.current_wz = 0.0
-        self.target_vx = 0.0  # Target velocity for smooth ramping
-        self.target_vy = 0.0
-        self.target_wz = 0.0
+        self.target_vx = 0.05  # Small baseline forward velocity (gentle creep)
+        self.target_vy = 0.0   # No baseline lateral movement
+        self.target_wz = 0.0   # No baseline rotation
         self.walk_upright_active = False  # Track walk upright state
         self.running = True
         self.lock = threading.Lock()
