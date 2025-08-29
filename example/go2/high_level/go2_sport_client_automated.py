@@ -35,11 +35,12 @@ SHOW_RETURNS   = False  # set True to print SDK return codes from Move/Stop
 
 # ----------------------------------------------------------------
 
-def do_move(client: SportClient, vx: float, vy: float, wz: float, duration: float = MOVE_DURATION):
+def do_move(client: SportClient, vx: float, vy: float, wz: float, duration: float = MOVE_DURATION, override: bool = True):
     """Send a brief motion command, then stop."""
-    # Immediately stop any current movement before starting new movement
-    client.StopMove()
-    time.sleep(0.05)  # Small delay to ensure stop command is processed
+    if override:
+        # Only stop current movement if we're overriding (different movement)
+        client.StopMove()
+        time.sleep(0.05)  # Small delay to ensure stop command is processed
     
     if SHOW_RETURNS:
         print(f"Move(vx={vx:.2f}, vy={vy:.2f}, wz={wz:.2f}) for {duration:.2f}s")
@@ -74,6 +75,9 @@ def curses_main(stdscr, client: SportClient):
     for i, t in enumerate(lines):
         stdscr.addstr(i, 0, t)
     stdscr.refresh()
+    
+    # Track current movement for smart override
+    current_movement = {'vx': 0.0, 'vy': 0.0, 'wz': 0.0}
 
     while True:
         ch = stdscr.getch()
@@ -87,31 +91,74 @@ def curses_main(stdscr, client: SportClient):
         if ch in (ord('q'), 27):  # 'q' or ESC
             break
 
-        # space -> hard stop
+        # space -> master stop (override all movements)
         if ch == ord(' '):
             client.StopMove()
+            # Reset current movement tracking to indicate complete stop
+            current_movement = {'vx': 0.0, 'vy': 0.0, 'wz': 0.0}
             continue
 
-        # normalized tap controls (one command at a time) - immediate override
+        # Smart movement controls - override only when movement changes
         if ch in (ord('w'), ord('W')):
-            do_move(client, LINEAR_SPEED, 0.0, 0.0)
+            new_movement = {'vx': LINEAR_SPEED, 'vy': 0.0, 'wz': 0.0}
+            override = (new_movement != current_movement)
+            do_move(client, LINEAR_SPEED, 0.0, 0.0, override=override)
+            current_movement = new_movement
         elif ch in (ord('s'), ord('S')):
-            do_move(client, -LINEAR_SPEED, 0.0, 0.0)
+            new_movement = {'vx': -LINEAR_SPEED, 'vy': 0.0, 'wz': 0.0}
+            override = (new_movement != current_movement)
+            do_move(client, -LINEAR_SPEED, 0.0, 0.0, override=override)
+            current_movement = new_movement
         elif ch in (ord('a'), ord('A')):
             # NOTE: If left/right seems reversed on your setup, swap +/- below.
-            do_move(client, 0.0,  LATERAL_SPEED, 0.0)   # left strafe
+            new_movement = {'vx': 0.0, 'vy': LATERAL_SPEED, 'wz': 0.0}
+            override = (new_movement != current_movement)
+            do_move(client, 0.0, LATERAL_SPEED, 0.0, override=override)   # left strafe
+            current_movement = new_movement
         elif ch in (ord('d'), ord('D')):
-            do_move(client, 0.0, -LATERAL_SPEED, 0.0)   # right strafe
+            new_movement = {'vx': 0.0, 'vy': -LATERAL_SPEED, 'wz': 0.0}
+            override = (new_movement != current_movement)
+            do_move(client, 0.0, -LATERAL_SPEED, 0.0, override=override)   # right strafe
+            current_movement = new_movement
         elif ch == curses.KEY_LEFT:
-            do_move(client, 0.0, 0.0,  ANGULAR_SPEED)   # rotate left (CCW)
+            new_movement = {'vx': 0.0, 'vy': 0.0, 'wz': ANGULAR_SPEED}
+            override = (new_movement != current_movement)
+            do_move(client, 0.0, 0.0, ANGULAR_SPEED, override=override)   # rotate left (CCW)
+            current_movement = new_movement
         elif ch == curses.KEY_RIGHT:
-            do_move(client, 0.0, 0.0, -ANGULAR_SPEED)   # rotate right (CW)
+            new_movement = {'vx': 0.0, 'vy': 0.0, 'wz': -ANGULAR_SPEED}
+            override = (new_movement != current_movement)
+            do_move(client, 0.0, 0.0, -ANGULAR_SPEED, override=override)   # rotate right (CW)
+            current_movement = new_movement
         else:
             # ignore any other keys
             pass
 
-        # Refresh minimal status line (optional)
-        stdscr.addstr(len(lines)+1, 0, f"Last key: {ch:>4}         ")
+        # Refresh status line with movement info
+        if ch == ord(' '):
+            movement_type = "MASTER STOP"
+        elif ch in (ord('w'), ord('W'), ord('s'), ord('S'), ord('a'), ord('A'), ord('d'), ord('D')) or ch in (curses.KEY_LEFT, curses.KEY_RIGHT):
+            # Check if this is the same movement as current
+            is_same_movement = False
+            if ch in (ord('w'), ord('W')) and current_movement['vx'] == LINEAR_SPEED and current_movement['vy'] == 0.0 and current_movement['wz'] == 0.0:
+                is_same_movement = True
+            elif ch in (ord('s'), ord('S')) and current_movement['vx'] == -LINEAR_SPEED and current_movement['vy'] == 0.0 and current_movement['wz'] == 0.0:
+                is_same_movement = True
+            elif ch in (ord('a'), ord('A')) and current_movement['vx'] == 0.0 and current_movement['vy'] == LATERAL_SPEED and current_movement['wz'] == 0.0:
+                is_same_movement = True
+            elif ch in (ord('d'), ord('D')) and current_movement['vx'] == 0.0 and current_movement['vy'] == -LATERAL_SPEED and current_movement['wz'] == 0.0:
+                is_same_movement = True
+            elif ch == curses.KEY_LEFT and current_movement['vx'] == 0.0 and current_movement['vy'] == 0.0 and current_movement['wz'] == ANGULAR_SPEED:
+                is_same_movement = True
+            elif ch == curses.KEY_RIGHT and current_movement['vx'] == 0.0 and current_movement['vy'] == 0.0 and current_movement['wz'] == -ANGULAR_SPEED:
+                is_same_movement = True
+            
+            movement_type = "QUEUE" if is_same_movement else "OVERRIDE"
+        else:
+            movement_type = ""
+        
+        status_line = f"Last key: {ch:>4} | Movement: {movement_type} | Current: vx={current_movement['vx']:6.2f} vy={current_movement['vy']:6.2f} wz={current_movement['wz']:6.2f}"
+        stdscr.addstr(len(lines)+1, 0, status_line + " " * 20)  # Clear any leftover text
         stdscr.refresh()
 
 def main():
