@@ -62,6 +62,7 @@ def curses_main(stdscr, client: SportClient):
         "w/s : forward/backward",
         "a/d : left/right (strafe)",
         "←/→ : rotate left/right",
+        "↑ : walk upright for 4s (no override)",
         "space: immediate stop",
         "q or ESC: quit",
         "",
@@ -79,14 +80,15 @@ def curses_main(stdscr, client: SportClient):
     current_movement = {'vx': 0.0, 'vy': 0.0, 'wz': 0.0}
     movement_start_time = None
     is_moving = False
+    walk_upright_active = False  # Track if walk upright is active
 
     while True:
         ch = stdscr.getch()
         
         # Handle no key pressed and check movement timer
         if ch == -1:  # -1 means no key pressed
-            # Check if current movement has exceeded duration
-            if is_moving and movement_start_time and (time.time() - movement_start_time) >= MOVE_DURATION:
+            # Check if current movement has exceeded duration (only if not in walk upright mode)
+            if is_moving and movement_start_time and (time.time() - movement_start_time) >= MOVE_DURATION and not walk_upright_active:
                 client.StopMove()
                 is_moving = False
                 movement_start_time = None
@@ -101,13 +103,14 @@ def curses_main(stdscr, client: SportClient):
         if ch in (ord('q'), 27):  # 'q' or ESC
             break
 
-        # space -> master stop (override all movements)
+        # space -> master stop (override all movements, except walk upright)
         if ch == ord(' '):
-            client.StopMove()
-            # Reset current movement tracking to indicate complete stop
-            current_movement = {'vx': 0.0, 'vy': 0.0, 'wz': 0.0}
-            is_moving = False
-            movement_start_time = None
+            if not walk_upright_active:
+                client.StopMove()
+                # Reset current movement tracking to indicate complete stop
+                current_movement = {'vx': 0.0, 'vy': 0.0, 'wz': 0.0}
+                is_moving = False
+                movement_start_time = None
             continue
 
         # Smart movement controls - override only when movement changes
@@ -154,12 +157,38 @@ def curses_main(stdscr, client: SportClient):
             current_movement = new_movement
             movement_start_time = time.time()
             is_moving = True
+        elif ch == curses.KEY_UP and not walk_upright_active:
+            # Walk upright for 4 seconds - no override allowed
+            print("Starting walk upright for 4 seconds...")
+            walk_upright_active = True
+            
+            # Stop any current movement first
+            client.StopMove()
+            time.sleep(0.1)
+            
+            # Enable walk upright
+            ret = client.WalkUpright(True)
+            if SHOW_RETURNS:
+                print(f"WalkUpright(True) ret: {ret}")
+            
+            # Wait for 4 seconds
+            time.sleep(4)
+            
+            # Disable walk upright
+            ret = client.WalkUpright(False)
+            if SHOW_RETURNS:
+                print(f"WalkUpright(False) ret: {ret}")
+            
+            print("Walk upright completed")
+            walk_upright_active = False
         else:
             # ignore any other keys
             pass
 
         # Refresh status line with movement info
-        if ch == ord(' '):
+        if walk_upright_active:
+            movement_type = "WALK UPRIGHT (LOCKED)"
+        elif ch == ord(' '):
             movement_type = "MASTER STOP"
         elif ch in (ord('w'), ord('W'), ord('s'), ord('S'), ord('a'), ord('A'), ord('d'), ord('D')) or ch in (curses.KEY_LEFT, curses.KEY_RIGHT):
             # Check if this is the same movement as current
