@@ -134,6 +134,8 @@ def curses_main(stdscr, controller: ContinuousController):
 
     # Track which keys are currently pressed
     pressed_keys = set()
+    # Track keys that were just pressed (for single-press actions)
+    just_pressed = set()
 
     while True:
         ch = stdscr.getch()
@@ -145,11 +147,16 @@ def curses_main(stdscr, controller: ContinuousController):
             elif ch == ord(' '):  # space
                 controller.set_movement(0.0, 0.0, 0.0)
                 pressed_keys.clear()
+                just_pressed.clear()
             else:
+                # Check if this is a new key press
+                if ch not in pressed_keys:
+                    just_pressed.add(ch)
                 pressed_keys.add(ch)
         else:
             # No key pressed, clear all pressed keys
             pressed_keys.clear()
+            just_pressed.clear()
 
         # Determine movement based on currently pressed keys
         vx, vy, wz = 0.0, 0.0, 0.0
@@ -172,10 +179,12 @@ def curses_main(stdscr, controller: ContinuousController):
         if curses.KEY_RIGHT in pressed_keys:
             wz -= ANGULAR_SPEED  # rotate right (CW)
 
-        # Walk upright controls (up/down arrows)
-        if curses.KEY_UP in pressed_keys:
+        # Walk upright controls (up/down arrows) - single press only
+        if curses.KEY_UP in just_pressed:
+            print("Up arrow pressed - enabling walk upright")  # Debug output
             controller.set_walk_upright(True)  # Enable walk upright
-        elif curses.KEY_DOWN in pressed_keys:
+        elif curses.KEY_DOWN in just_pressed:
+            print("Down arrow pressed - disabling walk upright")  # Debug output
             controller.set_walk_upright(False)  # Disable walk upright
 
         # Send movement command
