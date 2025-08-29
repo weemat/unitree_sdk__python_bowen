@@ -30,7 +30,7 @@ from unitree_sdk2py.go2.sport.sport_client import SportClient
 LINEAR_SPEED   = 0.50   # m/s forward/backward  (vx) - moderate speed
 LATERAL_SPEED  = 0.40   # m/s left/right        (vy) - moderate speed
 ANGULAR_SPEED  = 1.0   # rad/s yaw rate        (wz) - moderate rotation
-UPDATE_RATE    = 0.05   # seconds between movement updates (20 Hz) - more responsive
+UPDATE_RATE    = 0.10   # seconds between movement updates (10 Hz) - balanced for responsiveness and smoothness
 
 SHOW_RETURNS   = True   # set True to print SDK return codes from Move/Stop
 
@@ -53,22 +53,52 @@ class ContinuousController:
     
     def _movement_updater(self):
         """Background thread that continuously sends movement commands"""
+        last_vx, last_vy, last_wz = 0.0, 0.0, 0.0
+        freewalk_enabled = False
+        
         while self.running:
             with self.lock:
                 vx, vy, wz = self.current_vx, self.current_vy, self.current_wz
             
-            # Only send command if there's actual movement
+            # Only send command if movement has changed significantly or if stopping
+            movement_changed = (abs(vx - last_vx) > 0.01 or 
+                              abs(vy - last_vy) > 0.01 or 
+                              abs(wz - last_wz) > 0.01)
+            
             if abs(vx) > 0.01 or abs(vy) > 0.01 or abs(wz) > 0.01:
-                if SHOW_RETURNS:
-                    print(f"Move(vx={vx:.2f}, vy={vy:.2f}, wz={wz:.2f})")
-                ret = self.client.Move(vx, vy, wz)
-                if SHOW_RETURNS:
-                    print("ret:", ret)
+                # Enable FreeWalk mode for continuous movement
+                if not freewalk_enabled:
+                    if SHOW_RETURNS:
+                        print("Enabling FreeWalk mode")
+                    ret = self.client.FreeWalk()
+                    if SHOW_RETURNS:
+                        print("FreeWalk ret:", ret)
+                    freewalk_enabled = True
+                    time.sleep(0.1)  # Small delay for mode switch
+                
+                if movement_changed:
+                    if SHOW_RETURNS:
+                        print(f"Move(vx={vx:.2f}, vy={vy:.2f}, wz={wz:.2f})")
+                    ret = self.client.Move(vx, vy, wz)
+                    if SHOW_RETURNS:
+                        print("ret:", ret)
+                    last_vx, last_vy, last_wz = vx, vy, wz
             else:
-                # Stop if no movement
-                ret = self.client.StopMove()
-                if SHOW_RETURNS:
-                    print("Stop ret:", ret)
+                # Stop if no movement and we were moving before
+                if abs(last_vx) > 0.01 or abs(last_vy) > 0.01 or abs(last_wz) > 0.01:
+                    ret = self.client.StopMove()
+                    if SHOW_RETURNS:
+                        print("Stop ret:", ret)
+                    last_vx, last_vy, last_wz = 0.0, 0.0, 0.0
+                
+                # Disable FreeWalk mode when stopped
+                if freewalk_enabled:
+                    if SHOW_RETURNS:
+                        print("Disabling FreeWalk mode")
+                    ret = self.client.StopMove()
+                    if SHOW_RETURNS:
+                        print("StopMove ret:", ret)
+                    freewalk_enabled = False
             
             time.sleep(UPDATE_RATE)
     
