@@ -37,6 +37,10 @@ SHOW_RETURNS   = False  # set True to print SDK return codes from Move/Stop
 
 def do_move(client: SportClient, vx: float, vy: float, wz: float, duration: float = MOVE_DURATION):
     """Send a brief motion command, then stop."""
+    # Immediately stop any current movement before starting new movement
+    client.StopMove()
+    time.sleep(0.05)  # Small delay to ensure stop command is processed
+    
     if SHOW_RETURNS:
         print(f"Move(vx={vx:.2f}, vy={vy:.2f}, wz={wz:.2f}) for {duration:.2f}s")
     ret = client.Move(vx, vy, wz)
@@ -49,7 +53,7 @@ def do_move(client: SportClient, vx: float, vy: float, wz: float, duration: floa
 
 def curses_main(stdscr, client: SportClient):
     curses.curs_set(0)
-    stdscr.nodelay(False)   # block until a key is pressed (prevents simultaneous handling)
+    stdscr.nodelay(True)    # Don't block on key input (enables immediate response)
     stdscr.keypad(True)     # enable arrow keys
 
     lines = [
@@ -73,6 +77,11 @@ def curses_main(stdscr, client: SportClient):
 
     while True:
         ch = stdscr.getch()
+        
+        # Handle no key pressed
+        if ch == -1:  # -1 means no key pressed
+            time.sleep(0.01)  # Small delay to prevent excessive CPU usage
+            continue
 
         # quit
         if ch in (ord('q'), 27):  # 'q' or ESC
@@ -83,7 +92,7 @@ def curses_main(stdscr, client: SportClient):
             client.StopMove()
             continue
 
-        # normalized tap controls (one command at a time)
+        # normalized tap controls (one command at a time) - immediate override
         if ch in (ord('w'), ord('W')):
             do_move(client, LINEAR_SPEED, 0.0, 0.0)
         elif ch in (ord('s'), ord('S')):
