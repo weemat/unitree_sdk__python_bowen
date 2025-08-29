@@ -42,6 +42,7 @@ class ContinuousController:
         self.current_vx = 0.0
         self.current_vy = 0.0
         self.current_wz = 0.0
+        self.walk_upright_active = False  # Track walk upright state
         self.running = True
         self.lock = threading.Lock()
         
@@ -78,6 +79,24 @@ class ContinuousController:
             self.current_vy = vy
             self.current_wz = wz
     
+    def set_walk_upright(self, enable: bool):
+        """Enable or disable walk upright mode"""
+        with self.lock:
+            if enable != self.walk_upright_active:
+                self.walk_upright_active = enable
+                if enable:
+                    if SHOW_RETURNS:
+                        print("Enabling walk upright mode")
+                    ret = self.client.WalkUpright(True)
+                    if SHOW_RETURNS:
+                        print("WalkUpright(True) ret:", ret)
+                else:
+                    if SHOW_RETURNS:
+                        print("Disabling walk upright mode")
+                    ret = self.client.WalkUpright(False)
+                    if SHOW_RETURNS:
+                        print("WalkUpright(False) ret:", ret)
+    
     def stop(self):
         """Stop all movement and clean up"""
         self.running = False
@@ -98,6 +117,8 @@ def curses_main(stdscr, controller: ContinuousController):
         "w/s : forward/backward (hold to move)",
         "a/d : left/right (strafe) (hold to move)",
         "←/→ : rotate left/right (hold to rotate)",
+        "↑ : walk upright",
+        "↓ : leave walk upright",
         "space: immediate stop",
         "q or ESC: quit",
         "",
@@ -151,11 +172,18 @@ def curses_main(stdscr, controller: ContinuousController):
         if curses.KEY_RIGHT in pressed_keys:
             wz -= ANGULAR_SPEED  # rotate right (CW)
 
+        # Walk upright controls (up/down arrows)
+        if curses.KEY_UP in pressed_keys:
+            controller.set_walk_upright(True)  # Enable walk upright
+        elif curses.KEY_DOWN in pressed_keys:
+            controller.set_walk_upright(False)  # Disable walk upright
+
         # Send movement command
         controller.set_movement(vx, vy, wz)
 
         # Refresh status display
-        status_line = f"Movement: vx={vx:6.2f} vy={vy:6.2f} wz={wz:6.2f} | Pressed: {len(pressed_keys)} keys"
+        walk_status = "WALK UPRIGHT" if controller.walk_upright_active else "Normal"
+        status_line = f"Movement: vx={vx:6.2f} vy={vy:6.2f} wz={wz:6.2f} | Mode: {walk_status} | Pressed: {len(pressed_keys)} keys"
         stdscr.addstr(len(lines)+1, 0, status_line + " " * 20)  # Clear any leftover text
         stdscr.refresh()
 
