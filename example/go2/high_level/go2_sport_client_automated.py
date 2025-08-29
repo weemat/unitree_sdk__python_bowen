@@ -29,10 +29,10 @@ from unitree_sdk2py.go2.sport.sport_client import SportClient
 # --- Tunable parameters (choose conservative values to start) ---
 LINEAR_SPEED   = 0.80   # m/s forward/backward  (vx) - increased from 0.30
 LATERAL_SPEED  = 0.60   # m/s left/right        (vy) - increased from 0.30
-ANGULAR_SPEED  = 1.20   # rad/s yaw rate        (wz) - increased from 0.60
+ANGULAR_SPEED  = 1.4   # rad/s yaw rate        (wz) - increased from 0.60
 UPDATE_RATE    = 0.05   # seconds between movement updates (20 Hz)
 
-SHOW_RETURNS   = False  # set True to print SDK return codes from Move/Stop
+SHOW_RETURNS   = True   # set True to print SDK return codes from Move/Stop
 
 # ----------------------------------------------------------------
 
@@ -87,15 +87,32 @@ class ContinuousController:
                 if enable:
                     if SHOW_RETURNS:
                         print("Enabling walk upright mode")
-                    ret = self.client.WalkUpright(True)
-                    if SHOW_RETURNS:
-                        print("WalkUpright(True) ret:", ret)
+                    # First stop any current movement to avoid conflicts
+                    self.client.StopMove()
+                    time.sleep(0.2)  # Longer delay to ensure stop command is processed
+                    
+                    # Try to ensure robot is in a stable state
+                    try:
+                        ret = self.client.WalkUpright(True)
+                        if SHOW_RETURNS:
+                            print("WalkUpright(True) ret:", ret)
+                        if ret != 0:
+                            print(f"Warning: WalkUpright(True) returned error code: {ret}")
+                    except Exception as e:
+                        print(f"Exception during WalkUpright(True): {e}")
+                        self.walk_upright_active = False  # Reset state on error
                 else:
                     if SHOW_RETURNS:
                         print("Disabling walk upright mode")
-                    ret = self.client.WalkUpright(False)
-                    if SHOW_RETURNS:
-                        print("WalkUpright(False) ret:", ret)
+                    try:
+                        ret = self.client.WalkUpright(False)
+                        if SHOW_RETURNS:
+                            print("WalkUpright(False) ret:", ret)
+                        if ret != 0:
+                            print(f"Warning: WalkUpright(False) returned error code: {ret}")
+                    except Exception as e:
+                        print(f"Exception during WalkUpright(False): {e}")
+                    time.sleep(0.2)  # Longer delay after disabling
     
     def stop(self):
         """Stop all movement and clean up"""
@@ -182,10 +199,16 @@ def curses_main(stdscr, controller: ContinuousController):
         # Walk upright controls (up/down arrows) - single press only
         if curses.KEY_UP in just_pressed:
             print("Up arrow pressed - enabling walk upright")  # Debug output
-            controller.set_walk_upright(True)  # Enable walk upright
+            try:
+                controller.set_walk_upright(True)  # Enable walk upright
+            except Exception as e:
+                print(f"Error enabling walk upright: {e}")
         elif curses.KEY_DOWN in just_pressed:
             print("Down arrow pressed - disabling walk upright")  # Debug output
-            controller.set_walk_upright(False)  # Disable walk upright
+            try:
+                controller.set_walk_upright(False)  # Disable walk upright
+            except Exception as e:
+                print(f"Error disabling walk upright: {e}")
 
         # Send movement command
         controller.set_movement(vx, vy, wz)
