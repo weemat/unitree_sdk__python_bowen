@@ -31,9 +31,9 @@ LINEAR_SPEED   = 0.80   # m/s forward/backward  (vx) - increased from 0.30
 LATERAL_SPEED  = 0.60   # m/s left/right        (vy) - increased from 0.30
 ANGULAR_SPEED  = 1.4   # rad/s yaw rate        (wz) - increased from 0.60
 UPDATE_RATE    = 0.10   # seconds between movement updates (10 Hz) - reduced for smoother movement
-VELOCITY_RAMP_RATE = 0.3  # m/s per second - how fast to ramp up/down velocity
+VELOCITY_RAMP_RATE = 1.0  # m/s per second - faster ramping for more responsive movement
 
-SHOW_RETURNS   = False   # set True to print SDK return codes from Move/Stop
+SHOW_RETURNS   = True   # set True to print SDK return codes from Move/Stop
 
 # ----------------------------------------------------------------
 
@@ -43,7 +43,7 @@ class ContinuousController:
         self.current_vx = 0.0
         self.current_vy = 0.0
         self.current_wz = 0.0
-        self.target_vx = 0.05  # Small baseline forward velocity (gentle creep)
+        self.target_vx = 0.0   # No baseline forward velocity
         self.target_vy = 0.0   # No baseline lateral movement
         self.target_wz = 0.0   # No baseline rotation
         self.walk_upright_active = False  # Track walk upright state
@@ -237,6 +237,10 @@ def curses_main(stdscr, controller: ContinuousController):
 
         # Send movement command
         controller.set_movement(vx, vy, wz)
+        
+        # Debug output for movement
+        if vx != 0.0 or vy != 0.0 or wz != 0.0:
+            print(f"Movement command: vx={vx:.2f}, vy={vy:.2f}, wz={wz:.2f}")
 
         # Refresh status display
         walk_status = "WALK UPRIGHT" if controller.walk_upright_active else "Normal"
