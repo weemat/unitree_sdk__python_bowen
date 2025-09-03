@@ -27,8 +27,8 @@ from unitree_sdk2py.core.channel import ChannelFactoryInitialize
 from unitree_sdk2py.go2.sport.sport_client import SportClient
 
 # --- Tunable parameters (choose conservative values to start) ---
-LINEAR_SPEED   = 0.50   # m/s forward/backward  (vx) - moderate speed
-LATERAL_SPEED  = 0.40   # m/s left/right        (vy) - moderate speed
+LINEAR_SPEED   = 0.60   # m/s forward/backward  (vx) - moderate speed
+LATERAL_SPEED  = 0.60   # m/s left/right        (vy) - moderate speed
 ANGULAR_SPEED  = 1.0   # rad/s yaw rate        (wz) - moderate rotation
 UPDATE_RATE    = 0.10   # seconds between movement updates (10 Hz) - balanced for responsiveness and smoothness
 
