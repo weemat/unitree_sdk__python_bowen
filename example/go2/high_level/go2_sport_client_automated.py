@@ -29,7 +29,7 @@ from unitree_sdk2py.go2.sport.sport_client import SportClient
 # --- Tunable parameters (choose conservative values to start) ---
 LINEAR_SPEED   = 0.80   # m/s forward/backward  (vx) - moderate speed
 LATERAL_SPEED  = 0.80   # m/s left/right        (vy) - moderate speed
-ANGULAR_SPEED  = 1.5   # rad/s yaw rate        (wz) - moderate rotation
+ANGULAR_SPEED  = 1.6   # rad/s yaw rate        (wz) - moderate rotation
 UPDATE_RATE    = 0.10   # seconds between movement updates (10 Hz) - balanced for responsiveness and smoothness
 
 SHOW_RETURNS   = True   # set True to print SDK return codes from Move/Stop
